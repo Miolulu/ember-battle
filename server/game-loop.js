@@ -16,11 +16,13 @@ const SPAWN_POINTS = [
   { x: 600, y: 680 },
 ];
 
-function createDefaultMap() {
-  const map = Array.from({ length: physics.MAP_HEIGHT }, () =>
+function createEmptyMap() {
+  return Array.from({ length: physics.MAP_HEIGHT }, () =>
     Array(physics.MAP_WIDTH).fill(0)
   );
+}
 
+function addOuterWalls(map) {
   for (let x = 0; x < physics.MAP_WIDTH; x++) {
     map[0][x] = 1;
     map[physics.MAP_HEIGHT - 1][x] = 1;
@@ -29,21 +31,117 @@ function createDefaultMap() {
     map[y][0] = 1;
     map[y][physics.MAP_WIDTH - 1] = 1;
   }
+}
 
-  for (let x = 8; x < 12; x++) map[5][x] = 2;
-  for (let x = 18; x < 22; x++) map[5][x] = 2;
-  for (let x = 8; x < 12; x++) map[14][x] = 2;
-  for (let x = 18; x < 22; x++) map[14][x] = 2;
+function addCrossCover(map, cx, cy, size) {
+  for (let dx = -size; dx <= size; dx++) {
+    if (map[cy][cx + dx] === 0) map[cy][cx + dx] = 2;
+  }
+  for (let dy = -size; dy <= size; dy++) {
+    if (map[cy + dy][cx] === 0) map[cy + dy][cx] = 2;
+  }
+}
 
-  for (let y = 8; y < 12; y++) {
+function createEasyMap() {
+  const map = createEmptyMap();
+  addOuterWalls(map);
+  addCrossCover(map, 7, 5, 1);
+  addCrossCover(map, 22, 5, 1);
+  addCrossCover(map, 7, 14, 1);
+  addCrossCover(map, 22, 14, 1);
+  return map;
+}
+
+function createHardMap() {
+  const map = createEmptyMap();
+  addOuterWalls(map);
+
+  for (let x = 5; x <= 24; x++) map[6][x] = 1;
+  for (let x = 5; x <= 24; x++) map[13][x] = 1;
+  map[6][10] = 0; map[6][19] = 0;
+  map[13][10] = 0; map[13][19] = 0;
+
+  for (let y = 7; y <= 12; y++) {
     map[y][10] = 1;
     map[y][19] = 1;
   }
+  map[9][10] = 0;
+  map[10][19] = 0;
 
-  map[10][15] = 1;
-  map[10][16] = 1;
+  for (let x = 12; x <= 17; x++) map[9][x] = 2;
+  for (let x = 12; x <= 17; x++) map[10][x] = 2;
+  map[8][14] = 2; map[8][15] = 2;
+  map[11][14] = 2; map[11][15] = 2;
+
+  const spikes = [[8, 10], [21, 10], [8, 9], [21, 9], [14, 6], [15, 13]];
+  spikes.forEach(([tx, ty]) => { if (map[ty][tx] === 0) map[ty][tx] = 3; });
+
+  const slows = [[14, 4], [15, 16], [5, 9]];
+  slows.forEach(([tx, ty]) => { if (map[ty][tx] === 0) map[ty][tx] = 4; });
 
   return map;
+}
+
+function createHellMap() {
+  const map = createEmptyMap();
+  addOuterWalls(map);
+
+  for (let y = 2; y <= 17; y++) {
+    if (y % 3 !== 0) {
+      for (let x = 3; x <= 26; x += 6) {
+        if (x + 2 < physics.MAP_WIDTH - 1) {
+          map[y][x] = 1;
+          map[y][x + 1] = 1;
+          map[y][x + 2] = 1;
+        }
+      }
+    }
+  }
+
+  for (let x = 4; x <= 25; x += 5) {
+    map[4][x] = 0;
+    map[8][x] = 0;
+    map[12][x] = 0;
+    map[16][x] = 0;
+  }
+
+  for (let y = 5; y <= 15; y += 2) {
+    map[y][14] = 1;
+    map[y][15] = 1;
+  }
+  map[8][14] = 0; map[8][15] = 0;
+  map[12][14] = 0; map[12][15] = 0;
+
+  const destructibles = [
+    [6, 5], [7, 5], [22, 5], [23, 5],
+    [6, 14], [7, 14], [22, 14], [23, 14],
+    [10, 9], [11, 9], [18, 9], [19, 9],
+    [10, 10], [19, 10],
+  ];
+  destructibles.forEach(([tx, ty]) => { if (map[ty][tx] === 0) map[ty][tx] = 2; });
+
+  const spikes = [
+    [5, 7], [24, 7], [5, 12], [24, 12],
+    [10, 6], [19, 6], [10, 13], [19, 13],
+    [14, 5], [15, 14],
+  ];
+  spikes.forEach(([tx, ty]) => { if (map[ty][tx] === 0) map[ty][tx] = 3; });
+
+  const lavas = [[13, 9], [16, 9], [13, 10], [16, 10], [14, 7]];
+  lavas.forEach(([tx, ty]) => { if (map[ty][tx] === 0) map[ty][tx] = 5; });
+
+  const slows = [[7, 9], [22, 9], [14, 3], [15, 16]];
+  slows.forEach(([tx, ty]) => { if (map[ty][tx] === 0) map[ty][tx] = 4; });
+
+  return map;
+}
+
+function createMap(difficulty) {
+  switch (difficulty) {
+    case 'hard': return createHardMap();
+    case 'hell': return createHellMap();
+    default: return createEasyMap();
+  }
 }
 
 function normalize(dx, dy) {
@@ -61,17 +159,18 @@ let nextBulletId = 1;
 let nextWallId = 1;
 
 class GameLoop {
-  constructor(room, playerList, broadcast) {
+  constructor(room, playerList, mapDifficulty, broadcast) {
     this.room = room;
     this.broadcast = broadcast;
     this.tick = 0;
-    this.map = createDefaultMap();
+    this.map = createMap(mapDifficulty || 'easy');
     this.bullets = [];
     this.healZones = [];
     this.tempWalls = [];
     this.inputs = new Map();
     this.interval = null;
     this.ended = false;
+    this.fxEvents = [];
 
     this.players = new Map();
     playerList.forEach((entry, i) => {
@@ -80,7 +179,9 @@ class GameLoop {
       this.players.set(entry.ws, {
         ws: entry.ws,
         id: entry.id,
+        nickname: entry.nickname || entry.id,
         charId: entry.charId,
+        team: entry.team !== undefined ? entry.team : -1,
         x: spawn.x,
         y: spawn.y,
         dir: 0,
@@ -129,6 +230,31 @@ class GameLoop {
     return null;
   }
 
+  addFxEvent(type, x, y, extra) {
+    this.fxEvents.push({
+      type,
+      x,
+      y,
+      expiresAt: this.tick * TICK_MS + (extra && extra.duration ? extra.duration : 400),
+      ...extra,
+    });
+  }
+
+  cleanFxEvents() {
+    const now = this.tick * TICK_MS;
+    this.fxEvents = this.fxEvents.filter((e) => e.expiresAt > now);
+  }
+
+  isSameTeam(a, b) {
+    return a.team >= 0 && b.team >= 0 && a.team === b.team;
+  }
+
+  isEnemy(a, b) {
+    if (!a.alive || !b.alive) return false;
+    if (a.team < 0 || b.team < 0) return a.id !== b.id;
+    return a.team !== b.team;
+  }
+
   addEffect(player, type, durationMs) {
     player.effects.push({ type, expiresAt: this.tick * TICK_MS + durationMs });
   }
@@ -149,10 +275,12 @@ class GameLoop {
 
     this.processInputs(now);
     this.movePlayers();
+    this.processTrapDamage();
     this.moveBullets();
     this.tickHealZones();
     this.tickTempWalls(now);
     this.checkWinCondition();
+    this.cleanFxEvents();
     this.broadcastState();
   }
 
@@ -193,8 +321,13 @@ class GameLoop {
       const move = player.pendingMove || { x: 0, y: 0 };
       delete player.pendingMove;
 
-      let nx = player.x + move.x * def.speed;
-      let ny = player.y + move.y * def.speed;
+      const tx = Math.floor(player.x / physics.TILE_SIZE);
+      const ty = Math.floor(player.y / physics.TILE_SIZE);
+      const tile = physics.tileAt(this.map, tx, ty);
+      const speedMult = tile === 4 ? 0.5 : 1;
+
+      let nx = player.x + move.x * def.speed * speedMult;
+      let ny = player.y + move.y * def.speed * speedMult;
 
       const resolved = physics.resolveWallCollision(nx, ny, PLAYER_RADIUS, this.map);
       for (const wall of this.tempWalls) {
@@ -223,12 +356,29 @@ class GameLoop {
     return false;
   }
 
-  spawnBullet(owner, dx, dy, damage, speed, phaseThrough) {
+  processTrapDamage() {
+    for (const player of this.players.values()) {
+      if (!player.alive) continue;
+      const tx = Math.floor(player.x / physics.TILE_SIZE);
+      const ty = Math.floor(player.y / physics.TILE_SIZE);
+      const tile = physics.tileAt(this.map, tx, ty);
+      if (tile === 3) {
+        player.hp -= 2;
+        if (player.hp <= 0) { player.hp = 0; player.alive = false; player.deaths++; }
+      } else if (tile === 5) {
+        player.hp -= 5;
+        if (player.hp <= 0) { player.hp = 0; player.alive = false; player.deaths++; }
+      }
+    }
+  }
+
+  spawnBullet(owner, dx, dy, damage, speed, phaseThrough, maxBounces) {
     const dir = normalize(dx, dy);
     const offset = PLAYER_RADIUS + BULLET_RADIUS + 2;
     this.bullets.push({
       id: nextBulletId++,
       ownerId: owner.id,
+      ownerTeam: owner.team,
       x: owner.x + dir.x * offset,
       y: owner.y + dir.y * offset,
       dx: dir.x,
@@ -236,6 +386,7 @@ class GameLoop {
       speed,
       damage,
       phaseThrough,
+      bounces: maxBounces !== undefined ? maxBounces : 2,
       bornAt: this.tick * TICK_MS,
     });
   }
@@ -252,6 +403,7 @@ class GameLoop {
   }
 
   skillYan(player, def) {
+    this.addFxEvent('muzzle', player.x, player.y, { dir: player.dir, duration: 300 });
     const baseAngle = player.dir;
     const spread = (60 * Math.PI) / 180;
     const count = 5;
@@ -265,8 +417,9 @@ class GameLoop {
   }
 
   skillShenmu(player) {
+    this.addFxEvent('disruption', player.x, player.y, { duration: 800 });
     for (const other of this.players.values()) {
-      if (other.id === player.id || !other.alive) continue;
+      if (!this.isEnemy(player, other)) continue;
       const dx = other.x - player.x;
       const dy = other.y - player.y;
       if (dx * dx + dy * dy <= 150 * 150) {
@@ -283,6 +436,7 @@ class GameLoop {
       healPerTick: 5,
       expiresAt: this.tick * TICK_MS + 4000,
       ownerId: player.id,
+      ownerTeam: player.team,
     });
   }
 
@@ -325,6 +479,8 @@ class GameLoop {
     const remaining = [];
 
     for (const bullet of this.bullets) {
+      const prevX = bullet.x;
+      const prevY = bullet.y;
       bullet.x += bullet.dx * bullet.speed;
       bullet.y += bullet.dy * bullet.speed;
 
@@ -336,17 +492,44 @@ class GameLoop {
       ) continue;
 
       if (!bullet.phaseThrough && physics.checkWallCollision(bullet.x, bullet.y, BULLET_RADIUS, this.map)) {
+        if (bullet.bounces > 0) {
+          bullet.bounces--;
+          const tryX = { x: bullet.x, y: prevY };
+          const tryY = { x: prevX, y: bullet.y };
+          const hitX = physics.checkWallCollision(tryX.x, tryX.y, BULLET_RADIUS, this.map);
+          const hitY = physics.checkWallCollision(tryY.x, tryY.y, BULLET_RADIUS, this.map);
+
+          if (hitX && hitY) {
+            bullet.dx = -bullet.dx;
+            bullet.dy = -bullet.dy;
+          } else if (hitX) {
+            bullet.dx = -bullet.dx;
+          } else {
+            bullet.dy = -bullet.dy;
+          }
+
+          bullet.x = prevX + bullet.dx * bullet.speed;
+          bullet.y = prevY + bullet.dy * bullet.speed;
+          bullet.damage = Math.round(bullet.damage * 0.8);
+          this.addFxEvent('bounce', bullet.x, bullet.y, { duration: 150 });
+          remaining.push(bullet);
+        } else {
+          this.addFxEvent('impact', bullet.x, bullet.y, { duration: 200 });
+        }
         continue;
       }
 
       let hit = false;
       for (const player of this.players.values()) {
         if (!player.alive || player.id === bullet.ownerId) continue;
+        if (bullet.ownerTeam >= 0 && player.team === bullet.ownerTeam) continue;
         if (physics.checkCircleCollision(bullet.x, bullet.y, BULLET_RADIUS, player.x, player.y, PLAYER_RADIUS)) {
           if (this.hasEffect(player, 'dodge') && Math.random() < 0.5) {
+            this.addFxEvent('impact', bullet.x, bullet.y, { duration: 200 });
             hit = true;
             break;
           }
+          this.addFxEvent('impact', bullet.x, bullet.y, { duration: 200 });
           this.damagePlayer(player, bullet.damage, bullet.ownerId);
           hit = true;
           break;
@@ -377,6 +560,11 @@ class GameLoop {
     for (const zone of this.healZones) {
       for (const player of this.players.values()) {
         if (!player.alive) continue;
+        if (zone.ownerTeam >= 0) {
+          if (player.team !== zone.ownerTeam) continue;
+        } else if (player.id !== zone.ownerId) {
+          continue;
+        }
         const dx = player.x - zone.x;
         const dy = player.y - zone.y;
         if (dx * dx + dy * dy <= zone.radius * zone.radius) {
@@ -401,24 +589,46 @@ class GameLoop {
 
   checkWinCondition() {
     if (this.ended) return;
-    const alive = [...this.players.values()].filter((p) => p.alive);
-    if (alive.length <= 1) {
-      this.ended = true;
-      this.stop();
-      const winner = alive[0] || null;
-      this.broadcast({
-        type: 'game_over',
-        winner: winner ? { id: winner.id, charId: winner.charId, kills: winner.kills } : null,
-        scores: [...this.players.values()].map((p) => ({
-          id: p.id,
-          charId: p.charId,
-          kills: p.kills,
-          deaths: p.deaths,
-          alive: p.alive,
-        })),
-      });
-      require('./room').endGame(this.room);
+    const allPlayers = [...this.players.values()];
+    const alive = allPlayers.filter((p) => p.alive);
+    if (allPlayers.length <= 1) return;
+
+    const hasTeams = allPlayers.some((p) => p.team >= 0);
+
+    if (!hasTeams) {
+      if (alive.length <= 1) {
+        this.endGame(alive[0] || null, null);
+      }
+      return;
     }
+
+    const aliveTeams = new Set(alive.map((p) => p.team));
+    if (aliveTeams.size <= 1) {
+      const winningTeam = aliveTeams.size === 1 ? [...aliveTeams][0] : null;
+      const winner = winningTeam !== null ? alive.find((p) => p.team === winningTeam) : null;
+      this.endGame(winner || null, winningTeam);
+    }
+  }
+
+  endGame(winner, winningTeam) {
+    if (this.ended) return;
+    this.ended = true;
+    this.stop();
+    this.broadcast({
+      type: 'game_over',
+      winner: winner ? { id: winner.id, nickname: winner.nickname, charId: winner.charId, kills: winner.kills, team: winner.team } : null,
+      winningTeam,
+      scores: [...this.players.values()].map((p) => ({
+        id: p.id,
+        nickname: p.nickname || p.id,
+        charId: p.charId,
+        kills: p.kills,
+        deaths: p.deaths,
+        alive: p.alive,
+        team: p.team,
+      })),
+    });
+    require('./room').endGame(this.room);
   }
 
   broadcastState() {
@@ -428,7 +638,9 @@ class GameLoop {
       this.cleanEffects(p);
       players.push({
         id: p.id,
+        nickname: p.nickname || p.id,
         charId: p.charId,
+        team: p.team,
         x: p.x,
         y: p.y,
         dir: p.dir,
@@ -449,6 +661,8 @@ class GameLoop {
         x: b.x,
         y: b.y,
         dir: angleFromDir(b.dx, b.dy),
+        dx: b.dx,
+        dy: b.dy,
       })),
       healZones: this.healZones.map((z) => ({
         x: z.x,
@@ -464,6 +678,16 @@ class GameLoop {
           remaining: w.expiresAt - now,
         }))
       ),
+      impacts: this.fxEvents.filter((e) => e.type === 'impact').map((e) => ({
+        x: e.x, y: e.y, remaining: e.expiresAt - now,
+      })),
+      fxEvents: this.fxEvents.map((e) => ({
+        type: e.type,
+        x: e.x,
+        y: e.y,
+        dir: e.dir,
+        remaining: e.expiresAt - now,
+      })),
       items: [],
     });
   }

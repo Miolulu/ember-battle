@@ -1,6 +1,7 @@
-const { CHARACTERS, CHAR_LIST } = require('./characters');
+const { CHARACTERS, CHAR_LIST, TEAM_COLORS, TEAM_NAMES } = require('./characters');
 const assets = require('./assets');
 
+const DIFFICULTY_LABELS = { easy: '简单', hard: '困难', hell: '地狱' };
 const ACCENT = '#ff4d35';
 const BG = '#0d0d14';
 const PANEL = '#1a1a26';
@@ -16,6 +17,23 @@ const SKILL_IMG_MAP = {
   luyu: 'skill_luyu', jiangxue: 'skill_jiangxue', peijin: 'skill_peijin',
 };
 
+function drawTeamBadge(ctx, x, y, team, small) {
+  if (team === undefined || team < 0) return;
+  const color = TEAM_COLORS[team] || '#888899';
+  const label = TEAM_NAMES[team] || '?';
+  const bw = small ? 36 : 44;
+  const bh = small ? 16 : 20;
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
+  ctx.fillRect(x - bw / 2, y, bw, bh);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#ffffff';
+  ctx.font = (small ? '9' : '10') + 'px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x, y + bh / 2);
+}
+
 function fillBg(ctx, w, h) {
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, w, h);
@@ -23,8 +41,13 @@ function fillBg(ctx, w, h) {
 
 function drawImgButton(ctx, x, y, bw, bh, imgKey, label, primary) {
   const img = assets.get(imgKey);
-  if (img && img.complete) {
-    ctx.drawImage(img, x, y, bw, bh);
+  if (img && img.complete && img.naturalWidth) {
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    const scale = Math.min(bw / iw, bh / ih);
+    const dw = iw * scale;
+    const dh = ih * scale;
+    ctx.drawImage(img, x + (bw - dw) / 2, y + (bh - dh) / 2, dw, dh);
   } else {
     drawButton(ctx, x, y, bw, bh, label, primary);
   }
@@ -85,44 +108,58 @@ function drawLobby(ctx, w, h, state) {
     ctx.fillText(state.error, w / 2, h * 0.39);
   }
 
-  const btnW = 180;
-  const btnH = 44;
+  ctx.fillStyle = MUTED;
+  ctx.font = '13px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('昵称 (键盘直接输入):', w / 2, h * 0.37);
+
+  const inputW = 180;
+  const inputH = 36;
+  const inputX = w / 2 - inputW / 2;
+  const inputY = h * 0.39;
+  ctx.fillStyle = PANEL;
+  ctx.fillRect(inputX, inputY, inputW, inputH);
+  ctx.strokeStyle = ACCENT;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(inputX, inputY, inputW, inputH);
+  const displayNick = state.nicknameInput || '';
+  const blink = Math.floor(Date.now() / 500) % 2 === 0 ? '|' : '';
+  ctx.fillStyle = displayNick ? TEXT : MUTED;
+  ctx.font = '18px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(displayNick ? displayNick + blink : '输入昵称...' , w / 2, inputY + 24);
+
+  const btnW = 200;
+  const btnH = 50;
   const cx = w / 2 - btnW / 2;
 
-  drawImgButton(ctx, cx, h * 0.45, btnW, btnH, 'btn_create', '创建房间', true);
-  drawImgButton(ctx, cx, h * 0.55, btnW, btnH, 'btn_join', '加入房间', false);
+  drawButton(ctx, cx, h * 0.50, btnW, btnH, '创建房间', true);
+  drawButton(ctx, cx, h * 0.62, btnW, btnH, '加入房间', false);
 
   if (state.joinMode) {
+    ctx.fillStyle = MUTED;
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('输入4位房间号 (键盘输入, Enter确认, Esc取消):', w / 2, h * 0.72);
+
+    const codeW = 160;
+    const codeH = 44;
     ctx.fillStyle = PANEL;
-    ctx.fillRect(w / 2 - 100, h * 0.66, 200, 44);
+    ctx.fillRect(w / 2 - codeW / 2, h * 0.74, codeW, codeH);
     ctx.strokeStyle = ACCENT;
     ctx.lineWidth = 2;
-    ctx.strokeRect(w / 2 - 100, h * 0.66, 200, 44);
+    ctx.strokeRect(w / 2 - codeW / 2, h * 0.74, codeW, codeH);
+
+    const code = state.joinCode || '';
+    const display = code + '____'.slice(code.length);
     ctx.fillStyle = TEXT;
-    ctx.font = '24px monospace';
+    ctx.font = '28px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText((state.joinCode || '____').replace(/_/g, ' '), w / 2, h * 0.66 + 26);
+    ctx.fillText(display, w / 2, h * 0.74 + 30);
 
-    drawButton(ctx, cx, h * 0.76, btnW, btnH, '确认加入', true);
-
-    const keys = ['1','2','3','4','5','6','7','8','9','0','←'];
-    const kw = 36;
-    const kh = 36;
-    const startX = w / 2 - (keys.length * (kw + 4)) / 2;
-    const startY = h * 0.84;
-    keys.forEach((k, i) => {
-      const kx = startX + i * (kw + 4);
-      ctx.fillStyle = '#222233';
-      ctx.fillRect(kx, startY, kw, kh);
-      ctx.strokeStyle = '#444455';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(kx, startY, kw, kh);
-      ctx.fillStyle = TEXT;
-      ctx.font = '16px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(k, kx + kw / 2, startY + kh / 2);
-    });
+    if (code.length === 4) {
+      drawButton(ctx, cx, h * 0.84, btnW, 44, '确认加入 (Enter)', true);
+    }
   }
 
   if (state.connecting) {
@@ -147,9 +184,12 @@ function drawWaiting(ctx, w, h, state) {
 
   ctx.fillStyle = MUTED;
   ctx.font = '14px sans-serif';
-  ctx.fillText('玩家 (' + (state.players ? state.players.length : 0) + '/6)', w / 2, h * 0.32);
+  ctx.fillText('玩家 (' + (state.players ? state.players.length : 0) + '/6)', w / 2, h * 0.30);
 
-  const listY = h * 0.38;
+  const diffLabel = DIFFICULTY_LABELS[state.mapDifficulty] || '简单';
+  ctx.fillText('地图难度: ' + diffLabel, w / 2, h * 0.35);
+
+  const listY = h * 0.40;
   if (state.players) {
     state.players.forEach((p, i) => {
       const charDef = p.charId ? CHARACTERS[p.charId] : null;
@@ -168,14 +208,24 @@ function drawWaiting(ctx, w, h, state) {
       ctx.fillStyle = TEXT;
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'left';
-      const name = charDef ? charDef.name : p.id;
+      const name = p.nickname || p.id;
       const hostTag = p.isHost ? ' [房主]' : '';
       ctx.fillText(name + hostTag, w / 2 - 100, y + 5);
     });
   }
 
   if (state.isHost) {
-    drawImgButton(ctx, w / 2 - 90, h * 0.78, 180, 44, 'btn_start', '开始游戏', true);
+    const diffY = h * 0.68;
+    const diffBtnW = 80;
+    const diffGap = 10;
+    const diffTotal = diffBtnW * 3 + diffGap * 2;
+    const diffStartX = w / 2 - diffTotal / 2;
+    ['easy', 'hard', 'hell'].forEach((d, i) => {
+      const dx = diffStartX + i * (diffBtnW + diffGap);
+      const selected = state.mapDifficulty === d;
+      drawButton(ctx, dx, diffY, diffBtnW, 36, DIFFICULTY_LABELS[d], selected);
+    });
+    drawButton(ctx, w / 2 - 90, h * 0.78, 180, 44, '开始游戏', true);
   } else {
     ctx.fillStyle = MUTED;
     ctx.font = '14px sans-serif';
@@ -235,7 +285,7 @@ function drawCharSelect(ctx, w, h, state) {
     ctx.fillText(c.name, x + cardW / 2, y + cardH * 0.46);
     ctx.fillStyle = MUTED;
     ctx.font = '10px sans-serif';
-    ctx.fillText(c.role, x + cardW / 2, y + cardH * 0.73);
+    ctx.fillText(c.teamRole || c.role, x + cardW / 2, y + cardH * 0.73);
     ctx.fillText(c.skillName, x + cardW / 2, y + cardH * 0.81);
 
     // Stats bars
@@ -258,9 +308,26 @@ function drawCharSelect(ctx, w, h, state) {
 
   const readyLabel = state.ready ? '已准备' : '准备';
   if (!state.ready) {
-    drawImgButton(ctx, w / 2 - 80, h * 0.82, 160, 44, 'btn_ready', readyLabel, true);
+    drawButton(ctx, w / 2 - 80, h * 0.82, 160, 44, readyLabel, true);
   } else {
     drawButton(ctx, w / 2 - 80, h * 0.82, 160, 44, readyLabel, false);
+  }
+
+  if (state.players && state.players.some((p) => p.team >= 0)) {
+    ctx.fillStyle = MUTED;
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('队伍分配', w / 2, h * 0.76);
+    const badgeY = h * 0.79;
+    let bx = w / 2 - (state.players.length * 50) / 2;
+    state.players.forEach((p) => {
+      const charDef = p.charId ? CHARACTERS[p.charId] : null;
+      ctx.fillStyle = TEXT;
+      ctx.font = '10px sans-serif';
+      ctx.fillText(charDef ? charDef.name : p.id.slice(0, 6), bx + 25, badgeY - 6);
+      if (p.team >= 0) drawTeamBadge(ctx, bx + 25, badgeY + 2, p.team, true);
+      bx += 50;
+    });
   }
 }
 
@@ -271,42 +338,75 @@ function drawHUD(ctx, w, h, gameState, myId) {
   const panelX = w - panelW - 8;
   let panelY = 8;
 
+  const hasTeams = gameState.players.some((p) => p.team >= 0);
+  let grouped;
+
+  if (hasTeams) {
+    grouped = [];
+    const teamOrder = [0, 1, 2];
+    for (const t of teamOrder) {
+      const members = gameState.players.filter((p) => p.team === t);
+      if (members.length) grouped.push({ team: t, members });
+    }
+    const noTeam = gameState.players.filter((p) => p.team < 0);
+    if (noTeam.length) grouped.push({ team: -1, members: noTeam });
+  } else {
+    grouped = [{ team: -1, members: gameState.players }];
+  }
+
+  let totalH = 8;
+  for (const g of grouped) {
+    totalH += g.team >= 0 ? 18 : 0;
+    totalH += g.members.length * 30;
+  }
+
   ctx.fillStyle = 'rgba(13,13,20,0.8)';
-  ctx.fillRect(panelX, panelY, panelW, gameState.players.length * 30 + 8);
+  ctx.fillRect(panelX, panelY, panelW, totalH);
 
-  gameState.players.forEach((p) => {
-    const charDef = CHARACTERS[p.charId] || { name: '?', color: '#fff' };
-    const isMe = p.id === myId;
-
-    const charImg = assets.get(CHAR_IMG_MAP[p.charId]);
-    if (charImg && charImg.complete) {
-      ctx.drawImage(charImg, panelX + 4, panelY + 3, 22, 22);
-    } else {
-      ctx.fillStyle = charDef.color;
-      ctx.beginPath();
-      ctx.arc(panelX + 14, panelY + 16, 8, 0, Math.PI * 2);
-      ctx.fill();
+  for (const g of grouped) {
+    if (g.team >= 0) {
+      ctx.fillStyle = TEAM_COLORS[g.team] || MUTED;
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(TEAM_NAMES[g.team] || '队', panelX + 6, panelY + 12);
+      panelY += 18;
     }
 
-    ctx.fillStyle = isMe ? ACCENT : TEXT;
-    ctx.font = '11px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(charDef.name, panelX + 30, panelY + 12);
+    for (const p of g.members) {
+      const charDef = CHARACTERS[p.charId] || { name: '?', color: '#fff' };
+      const isMe = p.id === myId;
 
-    const hpPct = p.maxHp > 0 ? p.hp / p.maxHp : 0;
-    ctx.fillStyle = '#333344';
-    ctx.fillRect(panelX + 30, panelY + 17, 100, 4);
-    ctx.fillStyle = hpPct > 0.3 ? '#4dff88' : ACCENT;
-    ctx.fillRect(panelX + 30, panelY + 17, 100 * hpPct, 4);
+      const charImg = assets.get(CHAR_IMG_MAP[p.charId]);
+      if (charImg && charImg.complete) {
+        ctx.drawImage(charImg, panelX + 4, panelY + 3, 22, 22);
+      } else {
+        ctx.fillStyle = charDef.color;
+        ctx.beginPath();
+        ctx.arc(panelX + 14, panelY + 16, 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
-    if (!p.alive) {
-      ctx.fillStyle = ACCENT;
-      ctx.font = '10px sans-serif';
-      ctx.fillText('阵亡', panelX + 30, panelY + 27);
+      ctx.fillStyle = isMe ? ACCENT : TEXT;
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'left';
+      const displayName = p.nickname || charDef.name;
+      ctx.fillText(displayName, panelX + 30, panelY + 12);
+
+      const hpPct = p.maxHp > 0 ? p.hp / p.maxHp : 0;
+      ctx.fillStyle = '#333344';
+      ctx.fillRect(panelX + 30, panelY + 17, 100, 4);
+      ctx.fillStyle = hpPct > 0.3 ? '#4dff88' : ACCENT;
+      ctx.fillRect(panelX + 30, panelY + 17, 100 * hpPct, 4);
+
+      if (!p.alive) {
+        ctx.fillStyle = ACCENT;
+        ctx.font = '10px sans-serif';
+        ctx.fillText('阵亡', panelX + 30, panelY + 27);
+      }
+
+      panelY += 30;
     }
-
-    panelY += 30;
-  });
+  }
 
   if (gameState.killFeed && gameState.killFeed.length) {
     ctx.fillStyle = 'rgba(13,13,20,0.6)';
@@ -324,10 +424,28 @@ function drawGameOver(ctx, w, h, results) {
   fillBg(ctx, w, h);
 
   const won = results && results.won;
-  ctx.fillStyle = won ? '#4dff88' : ACCENT;
-  ctx.font = 'bold 32px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(won ? '胜利!' : '战斗结束', w / 2, h * 0.15);
+  const winningTeam = results && results.winningTeam;
+  const myTeam = results && results.myTeam;
+
+  if (winningTeam !== undefined && winningTeam !== null && winningTeam >= 0) {
+    const teamWon = myTeam === winningTeam;
+    const teamColor = TEAM_COLORS[winningTeam] || ACCENT;
+    const teamName = TEAM_NAMES[winningTeam] || '未知';
+    ctx.fillStyle = teamWon ? teamColor : MUTED;
+    ctx.font = 'bold 32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(teamName + ' 胜利!', w / 2, h * 0.15);
+    if (teamWon) {
+      ctx.fillStyle = '#4dff88';
+      ctx.font = '16px sans-serif';
+      ctx.fillText('你的队伍获胜!', w / 2, h * 0.22);
+    }
+  } else {
+    ctx.fillStyle = won ? '#4dff88' : ACCENT;
+    ctx.font = 'bold 32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(won ? '胜利!' : '战斗结束', w / 2, h * 0.15);
+  }
 
   ctx.fillStyle = TEXT;
   ctx.font = '16px sans-serif';
@@ -352,7 +470,8 @@ function drawGameOver(ctx, w, h, results) {
       ctx.fillStyle = TEXT;
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText((i + 1) + '. ' + charDef.name, w / 2 - 110, y + 5);
+      const displayName = s.nickname || charDef.name;
+      ctx.fillText((i + 1) + '. ' + displayName, w / 2 - 110, y + 5);
       ctx.fillStyle = MUTED;
       ctx.font = '12px sans-serif';
       ctx.fillText('击杀 ' + s.kills + ' / 死亡 ' + s.deaths, w / 2 + 20, y + 5);
@@ -367,40 +486,40 @@ function handleTouch(x, y, scene, state) {
   const h = state.screenH || 480;
 
   if (scene === 'lobby') {
-    const btnW = 180;
-    const btnH = 44;
+    const btnW = 200;
+    const btnH = 50;
     const cx = w / 2 - btnW / 2;
 
-    if (hitRect(x, y, cx, h * 0.45, btnW, btnH)) {
+    if (hitRect(x, y, cx, h * 0.50, btnW, btnH)) {
       return { action: 'create_room' };
     }
-    if (hitRect(x, y, cx, h * 0.55, btnW, btnH)) {
+    if (hitRect(x, y, cx, h * 0.62, btnW, btnH)) {
       return { action: 'toggle_join' };
     }
     if (state.joinMode) {
-      if (hitRect(x, y, cx, h * 0.76, btnW, btnH) && (state.joinCode || '').length === 4) {
+      if (hitRect(x, y, cx, h * 0.84, btnW, 44) && (state.joinCode || '').length === 4) {
         return { action: 'join_room', code: state.joinCode };
-      }
-      const keys = ['1','2','3','4','5','6','7','8','9','0','←'];
-      const kw = 36;
-      const kh = 36;
-      const startX = w / 2 - (keys.length * (kw + 4)) / 2;
-      const startY = h * 0.84;
-      for (let i = 0; i < keys.length; i++) {
-        const kx = startX + i * (kw + 4);
-        if (hitRect(x, y, kx, startY, kw, kh)) {
-          if (keys[i] === '←') {
-            return { action: 'join_backspace' };
-          }
-          return { action: 'join_digit', digit: keys[i] };
-        }
       }
     }
   }
 
   if (scene === 'waiting') {
-    if (state.isHost && hitRect(x, y, w / 2 - 90, h * 0.78, 180, 44)) {
-      return { action: 'start_game' };
+    if (state.isHost) {
+      const diffY = h * 0.68;
+      const diffBtnW = 80;
+      const diffGap = 10;
+      const diffTotal = diffBtnW * 3 + diffGap * 2;
+      const diffStartX = w / 2 - diffTotal / 2;
+      const diffs = ['easy', 'hard', 'hell'];
+      for (let i = 0; i < diffs.length; i++) {
+        const dx = diffStartX + i * (diffBtnW + diffGap);
+        if (hitRect(x, y, dx, diffY, diffBtnW, 36)) {
+          return { action: 'set_difficulty', difficulty: diffs[i] };
+        }
+      }
+      if (hitRect(x, y, w / 2 - 90, h * 0.78, 180, 44)) {
+        return { action: 'start_game' };
+      }
     }
   }
 

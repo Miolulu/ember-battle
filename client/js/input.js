@@ -22,6 +22,10 @@ let skillDown = false;
 let shootPressed = false;
 let skillPressed = false;
 
+let keys = {};
+let mouseDown = false;
+let gameActive = false;
+
 function getTouchPos(touch) {
   return { x: touch.clientX ?? touch.x, y: touch.clientY ?? touch.y };
 }
@@ -126,6 +130,7 @@ function bindCanvasEvents() {
     canvas.addEventListener('touchcancel', () => handleTouchEnd());
 
     canvas.addEventListener('mousedown', (e) => {
+      mouseDown = true;
       const rect = canvas.getBoundingClientRect();
       handleTouchStart(e.clientX - rect.left, e.clientY - rect.top);
     });
@@ -134,8 +139,19 @@ function bindCanvasEvents() {
       const rect = canvas.getBoundingClientRect();
       handleTouchMove(e.clientX - rect.left, e.clientY - rect.top);
     });
-    canvas.addEventListener('mouseup', () => handleTouchEnd());
-    canvas.addEventListener('mouseleave', () => handleTouchEnd());
+    canvas.addEventListener('mouseup', () => { mouseDown = false; handleTouchEnd(); });
+    canvas.addEventListener('mouseleave', () => { mouseDown = false; handleTouchEnd(); });
+
+    document.addEventListener('keydown', (e) => {
+      if (!gameActive) return;
+      keys[e.key.toLowerCase()] = true;
+      if (e.key === ' ' || e.key.toLowerCase() === 'j') shootPressed = true;
+      if (e.key.toLowerCase() === 'e' || e.key.toLowerCase() === 'k') skillPressed = true;
+    });
+    document.addEventListener('keyup', (e) => {
+      if (!gameActive) return;
+      keys[e.key.toLowerCase()] = false;
+    });
   }
 }
 
@@ -149,10 +165,21 @@ function update() {
 }
 
 function getInput() {
+  let dx = joyDir[0];
+  let dy = joyDir[1];
+
+  if (keys['w'] || keys['arrowup']) dy = -1;
+  if (keys['s'] || keys['arrowdown']) dy = 1;
+  if (keys['a'] || keys['arrowleft']) dx = -1;
+  if (keys['d'] || keys['arrowright']) dx = 1;
+
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len > 1) { dx /= len; dy /= len; }
+
   const result = {
-    dir: [...joyDir],
-    shoot: shootPressed || shootDown,
-    skill: skillPressed || skillDown,
+    dir: [dx, dy],
+    shoot: shootPressed || shootDown || mouseDown || keys[' '] || keys['j'],
+    skill: skillPressed || skillDown || keys['e'] || keys['k'],
   };
   shootPressed = false;
   skillPressed = false;
@@ -185,20 +212,18 @@ function drawControls(ctx, w, h, skillName, skillCooldownPct) {
   const { shootX, shootY, skillX, skillY } = getButtonCenters(w, h);
 
   ctx.globalAlpha = 0.85;
-  const shootImg = assets.get('btn_shoot');
-  if (shootImg && shootImg.complete) {
-    ctx.drawImage(shootImg, shootX - BTN_R, shootY - BTN_R, BTN_R * 2, BTN_R * 2);
-  } else {
-    ctx.fillStyle = '#ff4d35';
-    ctx.beginPath();
-    ctx.arc(shootX, shootY, BTN_R, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('射击', shootX, shootY);
-  }
+  ctx.fillStyle = '#ff4d35';
+  ctx.beginPath();
+  ctx.arc(shootX, shootY, BTN_R, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#cc3322';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('射击', shootX, shootY);
 
   ctx.fillStyle = '#2a2a3a';
   ctx.beginPath();
@@ -225,4 +250,15 @@ function drawControls(ctx, w, h, skillName, skillCooldownPct) {
   ctx.restore();
 }
 
-module.exports = { init, update, getInput, drawControls };
+function setGameActive(active) {
+  gameActive = active;
+  if (!active) {
+    keys = {};
+    shootPressed = false;
+    skillPressed = false;
+    shootDown = false;
+    skillDown = false;
+  }
+}
+
+module.exports = { init, update, getInput, drawControls, setGameActive };

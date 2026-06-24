@@ -30,6 +30,12 @@ let joinMode = false;
 let joinCode = '';
 let errorMsg = '';
 
+let nickname = '';
+let nicknameInput = '';
+
+let mapDifficulty = 'easy';
+let gameMap = null;
+
 let gameState = null;
 let prevState = null;
 let stateReceivedAt = 0;
@@ -80,6 +86,9 @@ function getUiState() {
     selectedChar,
     ready,
     takenChars,
+    nickname,
+    nicknameInput,
+    mapDifficulty,
   };
 }
 
@@ -121,9 +130,15 @@ function handleNetworkMessage(msg) {
   switch (msg.type) {
     case 'connected':
       myId = msg.id;
+      nickname = msg.nickname || msg.id;
+      nicknameInput = nickname;
       connected = true;
       connecting = false;
       errorMsg = '';
+      break;
+
+    case 'nickname_set':
+      nickname = msg.nickname;
       break;
 
     case 'room_created':
@@ -143,6 +158,7 @@ function handleNetworkMessage(msg) {
       roomCode = msg.code;
       roomState = msg.state;
       roomPlayers = msg.players || [];
+      if (msg.difficulty) mapDifficulty = msg.difficulty;
       isHost = roomPlayers.some((p) => p.id === myId && p.isHost);
       const me = roomPlayers.find((p) => p.id === myId);
       if (me) {
@@ -155,6 +171,8 @@ function handleNetworkMessage(msg) {
     case 'game_start':
       scene = 'playing';
       roomState = 'playing';
+      if (msg.map) gameMap = msg.map;
+      if (msg.difficulty) mapDifficulty = msg.difficulty;
       gameState = null;
       prevState = null;
       killFeed = [];
@@ -166,14 +184,20 @@ function handleNetworkMessage(msg) {
       stateReceivedAt = Date.now();
       break;
 
-    case 'game_over':
+    case 'game_over': {
+      const myScore = msg.scores && msg.scores.find((s) => s.id === myId);
       gameResults = {
         winner: msg.winner,
         scores: msg.scores,
-        won: msg.winner && msg.winner.id === myId,
+        winningTeam: msg.winningTeam,
+        myTeam: myScore ? myScore.team : -1,
+        won: msg.winningTeam >= 0
+          ? myScore && myScore.team === msg.winningTeam
+          : msg.winner && msg.winner.id === myId,
       };
       scene = 'gameover';
       break;
+    }
 
     case 'error':
       errorMsg = msg.message || '未知错误';
@@ -192,6 +216,7 @@ function handleUiAction(action) {
   switch (action.action) {
     case 'create_room':
       connectServer();
+      network.send({ type: 'set_nickname', nickname: nickname || nicknameInput || ('玩家' + Math.floor(Math.random() * 100)) });
       network.send({ type: 'create_room' });
       break;
     case 'toggle_join':
@@ -206,8 +231,12 @@ function handleUiAction(action) {
       break;
     case 'join_room':
       connectServer();
+      network.send({ type: 'set_nickname', nickname: nickname || nicknameInput || ('玩家' + Math.floor(Math.random() * 100)) });
       network.send({ type: 'join_room', code: action.code });
       joinMode = false;
+      break;
+    case 'set_difficulty':
+      network.send({ type: 'set_difficulty', difficulty: action.difficulty });
       break;
     case 'start_game':
       network.send({ type: 'start_game' });
@@ -227,6 +256,8 @@ function handleUiAction(action) {
       roomState = 'waiting';
       gameState = null;
       gameResults = null;
+      gameMap = null;
+      mapDifficulty = 'easy';
       selectedChar = null;
       ready = false;
       joinMode = false;
@@ -258,6 +289,36 @@ function bindUiTouch() {
   }
 }
 
+function bindKeyboardInput() {
+  document.addEventListener('keydown', (e) => {
+    if (scene === 'playing') return;
+
+    if (scene === 'lobby') {
+      if (joinMode) {
+        if (e.key >= '0' && e.key <= '9' && joinCode.length < 4) {
+          joinCode += e.key;
+        } else if (e.key === 'Backspace') {
+          joinCode = joinCode.slice(0, -1);
+        } else if (e.key === 'Enter' && joinCode.length === 4) {
+          handleUiAction({ action: 'join_room', code: joinCode });
+        } else if (e.key === 'Escape') {
+          joinMode = false;
+          joinCode = '';
+        }
+      } else {
+        if (e.key === 'Backspace') {
+          nicknameInput = nicknameInput.slice(0, -1);
+        } else if (e.key === 'Enter') {
+          handleUiAction({ action: 'create_room' });
+        } else if (e.key.length === 1 && nicknameInput.length < 8) {
+          nicknameInput += e.key;
+        }
+      }
+      e.preventDefault();
+    }
+  });
+}
+
 function updateSkillCooldown() {
   if (localSkillCooldown > 0) {
     localSkillCooldown = Math.max(0, localSkillCooldown - 16);
@@ -276,6 +337,8 @@ function gameLoop() {
 
   screenW = canvas.width;
   screenH = canvas.height;
+
+  input.setGameActive(scene === 'playing');
 
   if (scene === 'lobby') {
     ui.drawLobby(ctx, screenW, screenH, getUiState());
@@ -299,7 +362,7 @@ function gameLoop() {
     }
 
     const renderState = getRenderState();
-    camera = renderer.render(renderState, myId, camera, screenW, screenH) || camera;
+    camera = renderer.render(renderState, myId, camera, screenW, screenH, gameMap) || camera;
     ui.drawHUD(ctx, screenW, screenH, renderState || gameState, myId);
 
     const me = renderState && renderState.players ? renderState.players.find((p) => p.id === myId) : null;
@@ -341,6 +404,7 @@ function start() {
   renderer.init(canvas);
   input.init(canvas);
   bindUiTouch();
+  bindKeyboardInput();
 
   network.onOpen(() => {
     connected = true;

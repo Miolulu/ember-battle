@@ -36,7 +36,8 @@ const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws) => {
   ws.playerId = `p${nextPlayerId++}`;
-  send(ws, { type: 'connected', id: ws.playerId });
+  ws.nickname = ws.playerId;
+  send(ws, { type: 'connected', id: ws.playerId, nickname: ws.nickname });
 
   ws.on('message', (raw) => {
     let msg;
@@ -48,15 +49,21 @@ wss.on('connection', (ws) => {
     }
 
     switch (msg.type) {
+      case 'set_nickname': {
+        ws.nickname = (msg.nickname || '').slice(0, 8) || ws.playerId;
+        send(ws, { type: 'nickname_set', nickname: ws.nickname });
+        break;
+      }
+
       case 'create_room': {
-        const code = room.createRoom(ws, ws.playerId);
+        const code = room.createRoom(ws, ws.nickname || ws.playerId);
         send(ws, { type: 'room_created', code });
         send(ws, room.roomSnapshot(room.getRoom(code)));
         break;
       }
 
       case 'join_room': {
-        const result = room.joinRoom(ws, msg.code, ws.playerId);
+        const result = room.joinRoom(ws, msg.code, ws.nickname || ws.playerId);
         if (result.error) {
           send(ws, { type: 'error', message: result.error });
         } else {
@@ -79,6 +86,12 @@ wss.on('connection', (ws) => {
 
       case 'start_game': {
         const result = room.startCharacterSelection(ws);
+        if (result.error) send(ws, { type: 'error', message: result.error });
+        break;
+      }
+
+      case 'set_difficulty': {
+        const result = room.setDifficulty(ws, msg.difficulty);
         if (result.error) send(ws, { type: 'error', message: result.error });
         break;
       }

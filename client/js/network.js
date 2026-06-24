@@ -4,6 +4,7 @@ let socket = null;
 let messageHandler = null;
 let openHandler = null;
 let closeHandler = null;
+let pendingQueue = [];
 
 function connect(url) {
   disconnect();
@@ -34,6 +35,10 @@ function connect(url) {
     socket = new WebSocket(url);
     socket.onopen = () => {
       if (openHandler) openHandler();
+      while (pendingQueue.length > 0) {
+        const msg = pendingQueue.shift();
+        socket.send(msg);
+      }
     };
     socket.onmessage = (ev) => {
       if (messageHandler) {
@@ -61,6 +66,8 @@ function send(data) {
     wx.sendSocketMessage({ data: payload });
   } else if (socket.readyState === WebSocket.OPEN) {
     socket.send(payload);
+  } else if (socket.readyState === WebSocket.CONNECTING) {
+    pendingQueue.push(payload);
   }
 }
 

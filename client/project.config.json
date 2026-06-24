@@ -1,39 +1,36 @@
-﻿{
-  "description": "余烬·战场 WeChat Mini Game",
-  "packOptions": { "ignore": [], "include": [] },
+{
   "setting": {
-    "urlCheck": false,
     "es6": true,
-    "enhance": true,
     "postcss": true,
     "minified": true,
-    "newFeature": true,
-    "coverView": true,
-    "nodeModules": false,
-    "autoAudits": false,
-    "showShadowRootInWxmlPanel": true,
-    "scopeDataCheck": false,
     "uglifyFileName": false,
-    "checkInvalidKey": true,
-    "checkSiteMap": true,
-    "uploadWithSourceMap": true,
-    "compileHotReLoad": false,
-    "useMultiFrameRuntime": true,
-    "useApiHook": true,
-    "useApiHostProcess": true,
-    "babelSetting": { "ignore": [], "disablePlugins": [], "outputPath": "" },
-    "bundle": false,
-    "useIsolateContext": true,
-    "useCompilerModule": true,
-    "userConfirmedUseCompilerModuleSwitch": false,
-    "userConfirmedBundleSwitch": false,
-    "packNpmManually": false,
+    "enhance": true,
     "packNpmRelationList": [],
-    "minifyWXSS": true
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    },
+    "useCompilerPlugins": false,
+    "compileWorklet": false,
+    "uploadWithSourceMap": true,
+    "packNpmManually": false,
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true
   },
-  "compileType": "game",
-  "libVersion": "3.3.4",
-  "appid": "",
+  "compileType": "plugin",
   "projectname": "ember-battle",
-  "condition": {}
+  "appid": "wx11d7a49562ac1fcd",
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "editorSetting": {},
+  "libVersion": "3.16.2",
+  "simulatorPluginLibVersion": {}
 }
