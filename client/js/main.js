@@ -5,7 +5,10 @@ const ui = require('./ui');
 const assets = require('./assets');
 const { CHARACTERS } = require('./characters');
 
-const SERVER_URL = 'ws://localhost:3000';
+const PROD_WS = 'wss://ember-battle-server.onrender.com';
+const SERVER_URL = (typeof location !== 'undefined' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1')
+  ? PROD_WS
+  : 'ws://localhost:3000';
 const INPUT_INTERVAL = 50;
 const TICK_MS = 50;
 
