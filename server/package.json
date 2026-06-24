@@ -1,0 +1,13 @@
+{
+  "name": "ember-battle-server",
+  "version": "1.0.0",
+  "description": "WebSocket game server for 余烬·战场 (Ember Battlefield)",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
