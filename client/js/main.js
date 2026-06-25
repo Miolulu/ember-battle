@@ -5,7 +5,7 @@ const ui = require('./ui');
 const assets = require('./assets');
 const { CHARACTERS } = require('./characters');
 
-const PROD_WS = 'wss://ember-battle-server.onrender.com';
+const PROD_WS = 'wss://treewhisper-production.up.railway.app';
 const SERVER_URL = (typeof location !== 'undefined' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1')
   ? PROD_WS
   : 'ws://localhost:3000';
