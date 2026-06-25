@@ -291,12 +291,15 @@ class GameLoop {
 
       const def = CHARACTERS[player.charId];
       const dir = normalize(input.dir[0], input.dir[1]);
-      if (dir.x !== 0 || dir.y !== 0) {
+      const isMoving = dir.x !== 0 || dir.y !== 0;
+      if (isMoving) {
         player.dir = angleFromDir(dir.x, dir.y);
       }
 
-      if (input.shoot && player.shootCooldown <= 0 && (dir.x !== 0 || dir.y !== 0)) {
-        this.spawnBullet(player, dir.x, dir.y, def.damage, def.bulletSpeed, false);
+      if (input.shoot && player.shootCooldown <= 0) {
+        const shootDx = isMoving ? dir.x : Math.cos(player.dir);
+        const shootDy = isMoving ? dir.y : Math.sin(player.dir);
+        this.spawnBullet(player, shootDx, shootDy, def.damage, def.bulletSpeed, false);
         player.shootCooldown = SHOOT_COOLDOWN;
       }
 
@@ -663,6 +666,7 @@ class GameLoop {
         dir: angleFromDir(b.dx, b.dy),
         dx: b.dx,
         dy: b.dy,
+        ownerId: b.ownerId,
       })),
       healZones: this.healZones.map((z) => ({
         x: z.x,

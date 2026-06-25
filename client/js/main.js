@@ -9,7 +9,7 @@ const PROD_WS = 'wss://treewhisper-production.up.railway.app';
 const SERVER_URL = (typeof location !== 'undefined' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1')
   ? PROD_WS
   : 'ws://localhost:3000';
-const INPUT_INTERVAL = 50;
+const INPUT_INTERVAL = 33;
 const TICK_MS = 50;
 
 const isWeChat = typeof wx !== 'undefined' && wx.createCanvas;

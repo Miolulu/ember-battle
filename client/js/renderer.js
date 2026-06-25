@@ -352,16 +352,25 @@ function drawPlayer(player, camera, isLocal) {
   ctx.restore();
 }
 
-function drawBullets(bullets, camera) {
+function getBulletColor(ownerId, players) {
+  if (!players || !ownerId) return '#ffaa44';
+  const owner = players.find((p) => p.id === ownerId);
+  if (!owner || !owner.charId) return '#ffaa44';
+  const def = CHARACTERS[owner.charId];
+  return def ? def.color : '#ffaa44';
+}
+
+function drawBullets(bullets, camera, players) {
   if (!bullets) return;
-  ctx.fillStyle = '#ffaa44';
   for (const b of bullets) {
     const bx = b.x - camera.x;
     const by = b.y - camera.y;
+    const color = getBulletColor(b.ownerId, players);
+
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.3;
     const dx = b.dx !== undefined ? b.dx : Math.cos(b.dir || 0);
     const dy = b.dy !== undefined ? b.dy : Math.sin(b.dir || 0);
-
-    ctx.globalAlpha = 0.3;
     ctx.beginPath();
     ctx.arc(bx - dx * 6, by - dy * 6, 2, 0, Math.PI * 2);
     ctx.fill();
@@ -370,7 +379,14 @@ function drawBullets(bullets, camera) {
     ctx.beginPath();
     ctx.arc(bx, by, 4, 0, Math.PI * 2);
     ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.arc(bx, by, 1.5, 0, Math.PI * 2);
+    ctx.fill();
   }
+  ctx.globalAlpha = 1;
 }
 
 function drawItems(items, camera) {
@@ -398,7 +414,7 @@ function render(state, myId, camera, screenW, screenH, mapData) {
   drawFxEvents(state && state.fxEvents, cam);
   drawImpacts(state && state.impacts, cam);
 
-  if (state && state.bullets) drawBullets(state.bullets, cam);
+  if (state && state.bullets) drawBullets(state.bullets, cam, state.players);
 
   if (state && state.players) {
     const sorted = [...state.players].sort((a, b) => (a.id === myId ? 1 : 0) - (b.id === myId ? 1 : 0));
