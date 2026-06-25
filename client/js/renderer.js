@@ -404,8 +404,7 @@ function render(state, myId, camera, screenW, screenH, mapData) {
   animTime = Date.now();
   ctx.clearRect(0, 0, screenW, screenH);
 
-  const localPlayer = state && state.players ? state.players.find((p) => p.id === myId) : null;
-  const cam = camera || computeCamera(localPlayer, screenW, screenH);
+  const cam = camera || { x: 0, y: 0 };
 
   drawMap(cam, mapData);
   drawHealZones(state && state.healZones, cam);
@@ -417,11 +416,12 @@ function render(state, myId, camera, screenW, screenH, mapData) {
   if (state && state.bullets) drawBullets(state.bullets, cam, state.players);
 
   if (state && state.players) {
-    const sorted = [...state.players].sort((a, b) => (a.id === myId ? 1 : 0) - (b.id === myId ? 1 : 0));
-    for (const p of sorted) drawPlayer(p, cam, p.id === myId);
+    for (const p of state.players) {
+      if (p.id !== myId) drawPlayer(p, cam, false);
+    }
+    const me = state.players.find((p) => p.id === myId);
+    if (me) drawPlayer(me, cam, true);
   }
-
-  return cam;
 }
 
 module.exports = { init, render, computeCamera };

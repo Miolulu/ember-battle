@@ -454,6 +454,48 @@ function getUiState() {
   };
 }
 
+let localPlayerX = 0;
+let localPlayerY = 0;
+let localPlayerDir = 0;
+let localPredictionActive = false;
+
+function applyLocalPrediction(inp) {
+  if (!gameState || !gameState.players) return;
+  const me = gameState.players.find((p) => p.id === myId);
+  if (!me || !me.alive) { localPredictionActive = false; return; }
+
+  if (!localPredictionActive) {
+    localPlayerX = me.x;
+    localPlayerY = me.y;
+    localPlayerDir = me.dir;
+    localPredictionActive = true;
+  }
+
+  const charDef = me.charId ? CHARACTERS[me.charId] : null;
+  const speed = charDef ? charDef.speed : 3.5;
+  const dx = inp.dir[0];
+  const dy = inp.dir[1];
+  const len = Math.sqrt(dx * dx + dy * dy);
+
+  if (len > 0.01) {
+    const ndx = dx / len;
+    const ndy = dy / len;
+    localPlayerX += ndx * speed;
+    localPlayerY += ndy * speed;
+    localPlayerDir = Math.atan2(ndy, ndx);
+  }
+}
+
+function reconcileWithServer() {
+  if (!gameState || !gameState.players || !localPredictionActive) return;
+  const me = gameState.players.find((p) => p.id === myId);
+  if (!me) { localPredictionActive = false; return; }
+
+  const lerpRate = 0.3;
+  localPlayerX += (me.x - localPlayerX) * lerpRate;
+  localPlayerY += (me.y - localPlayerY) * lerpRate;
+}
+
 function interpolateState(from, to, t) {
   if (!to) return null;
   if (!from || !from.players) return to;
@@ -461,6 +503,9 @@ function interpolateState(from, to, t) {
   const result = {
     ...to,
     players: to.players.map((tp) => {
+      if (tp.id === myId && localPredictionActive) {
+        return { ...tp, x: localPlayerX, y: localPlayerY, dir: localPlayerDir };
+      }
       const fp = from.players.find((p) => p.id === tp.id);
       if (!fp) return { ...tp };
       return {
@@ -470,8 +515,24 @@ function interpolateState(from, to, t) {
         dir: tp.dir,
       };
     }),
+    bullets: extrapolateBullets(to.bullets, Date.now() - stateReceivedAt),
   };
   return result;
+}
+
+function extrapolateBullets(bullets, elapsed) {
+  if (!bullets) return bullets;
+  const factor = elapsed / 1000;
+  return bullets.map((b) => {
+    const dx = b.dx !== undefined ? b.dx : Math.cos(b.dir || 0);
+    const dy = b.dy !== undefined ? b.dy : Math.sin(b.dir || 0);
+    const speed = 7;
+    return {
+      ...b,
+      x: b.x + dx * speed * factor * 8,
+      y: b.y + dy * speed * factor * 8,
+    };
+  });
 }
 
 function getRenderState() {
@@ -538,6 +599,8 @@ function handleNetworkMessage(msg) {
       gameState = null;
       prevState = null;
       killFeed = [];
+      localPredictionActive = false;
+      camera = { x: undefined };
       break;
 
     case 'state':
@@ -713,6 +776,9 @@ function gameLoop() {
     const now = Date.now();
     const inp = input.getInput();
 
+    applyLocalPrediction(inp);
+    reconcileWithServer();
+
     if (now - lastInputSent >= INPUT_INTERVAL) {
       network.send({ type: 'input', dir: inp.dir, shoot: inp.shoot, skill: inp.skill });
       if (inp.skill) {
@@ -724,7 +790,19 @@ function gameLoop() {
     }
 
     const renderState = getRenderState();
-    camera = renderer.render(renderState, myId, camera, screenW, screenH, gameMap) || camera;
+    const targetCam = renderer.computeCamera(
+      renderState && renderState.players ? renderState.players.find((p) => p.id === myId) : null,
+      screenW, screenH
+    );
+    if (camera.x === undefined) {
+      camera = targetCam;
+    } else {
+      camera = {
+        x: camera.x + (targetCam.x - camera.x) * 0.15,
+        y: camera.y + (targetCam.y - camera.y) * 0.15,
+      };
+    }
+    renderer.render(renderState, myId, camera, screenW, screenH, gameMap);
     ui.drawHUD(ctx, screenW, screenH, renderState || gameState, myId);
 
     const me = renderState && renderState.players ? renderState.players.find((p) => p.id === myId) : null;
@@ -1345,8 +1423,7 @@ function render(state, myId, camera, screenW, screenH, mapData) {
   animTime = Date.now();
   ctx.clearRect(0, 0, screenW, screenH);
 
-  const localPlayer = state && state.players ? state.players.find((p) => p.id === myId) : null;
-  const cam = camera || computeCamera(localPlayer, screenW, screenH);
+  const cam = camera || { x: 0, y: 0 };
 
   drawMap(cam, mapData);
   drawHealZones(state && state.healZones, cam);
@@ -1358,11 +1435,12 @@ function render(state, myId, camera, screenW, screenH, mapData) {
   if (state && state.bullets) drawBullets(state.bullets, cam, state.players);
 
   if (state && state.players) {
-    const sorted = [...state.players].sort((a, b) => (a.id === myId ? 1 : 0) - (b.id === myId ? 1 : 0));
-    for (const p of sorted) drawPlayer(p, cam, p.id === myId);
+    for (const p of state.players) {
+      if (p.id !== myId) drawPlayer(p, cam, false);
+    }
+    const me = state.players.find((p) => p.id === myId);
+    if (me) drawPlayer(me, cam, true);
   }
-
-  return cam;
 }
 
 module.exports = { init, render, computeCamera };
